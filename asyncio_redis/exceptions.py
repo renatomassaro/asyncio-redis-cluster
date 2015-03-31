@@ -57,3 +57,9 @@ class ScriptKilledError(Error):
 
 class NoRunningScriptError(Error):
     """ script_kill was called while no script was running. """
+
+
+class NodeError(Error):
+    """
+    Node error
+    """

@@ -1,18 +1,21 @@
-from functools import wraps
-import asyncio
-import random
-
 from .connection import Connection
 from .exceptions import NoAvailableConnectionsInPoolError
 from .protocol import RedisProtocol, Script
-
 from .nodemanager import NodeManager
-from .crc import crc16
+
+from functools import wraps
+import asyncio
+
 
 __all__ = ('Pool', )
 
 
-class Pool:
+class ClusterConnection:
+
+    def __init__(self, startup_nodes=None, init_slot_cache=True,
+                 pipeline_use_threads=True):
+        self.startup_nodes = startup_nodes
+
     """
     Pool of connections. Each
     Takes care of setting up the connection and connection pooling.
@@ -25,16 +28,19 @@ class Pool:
         pool = yield from Pool.create(host='localhost', port=6379, poolsize=10)
         result = yield from connection.set('key', 'value')
     """
-    @classmethod
     @asyncio.coroutine
-    def create(cls, nodes, *, password=None, db=0,
+    def create(self, host='localhost', port=6379, *, password=None, db=0,
                encoder=None, poolsize=1, auto_reconnect=True, loop=None,
                protocol_class=RedisProtocol):
+
+        self.nodes = NodeManager(self.startup_nodes)
+        print(self.nodes)
+
         """
         Create a new connection pool instance.
 
         :param host: Address, either host or unix domain socket path
-        :type host: list
+        :type host: str
         :param port: TCP port. If port is 0 then host assumed to be unix socket path
         :type port: int
         :param password: Redis database password
@@ -51,31 +57,19 @@ class Pool:
         :type protocol_class: :class:`~asyncio_redis.RedisProtocol`
         :param protocol_class: (optional) redis protocol implementation
         """
-        self = cls()
-        self.nodes = NodeManager(nodes)
-        yield from self.nodes.initialize()
-
+        self._host = host
+        self._port = port
         self._poolsize = poolsize
 
         # Create connections
-        self._connections = {}
+        self._connections = []
 
-        for node in self.nodes.nodes:
-
-            host = self.nodes.nodes[node]['host']
-            port = self.nodes.nodes[node]['port']
-
-            self._host = host
-            self._port = port
-            self._connections[node] = []
-
-            for i in range(poolsize):
-                connection = yield from Connection\
-                    .create(host=self._host, port=self._port,
-                                password=password, db=db, encoder=encoder,
-                                auto_reconnect=auto_reconnect, loop=loop,
-                                protocol_class=protocol_class)
-                self._connections[node].append(connection)
+        for i in range(poolsize):
+            connection = yield from Connection.create(host=host, port=port,
+                            password=password, db=db, encoder=encoder,
+                            auto_reconnect=auto_reconnect, loop=loop,
+                            protocol_class=protocol_class)
+            self._connections.append(connection)
 
         return self
 
@@ -92,7 +86,6 @@ class Pool:
         """
         Return how many protocols are in use.
         """
-        raise NotImplementedError
         return sum([ 1 for c in self._connections if c.protocol.in_use ])
 
     @property
@@ -100,66 +93,39 @@ class Pool:
         """
         The amount of open TCP connections.
         """
-        raise NotImplementedError
         return sum([ 1 for c in self._connections if c.protocol.is_connected ])
 
-    def _get_free_connection(self, host):
+    def _get_free_connection(self):
         """
         Return the next protocol instance that's not in use.
         (A protocol in pubsub mode or doing a blocking request is considered busy,
         and can't be used for anything else.)
         """
-        self._shuffle_connections(host)
+        self._shuffle_connections()
 
-        for c in self._connections[host]:
+        for c in self._connections:
             if c.protocol.is_connected and not c.protocol.in_use:
                 return c
 
-    def _get_host_by_key(self, key, is_read=False):
-        slot = crc16(key) % self.nodes.RedisClusterHashSlots
-        if not is_read:
-            index = 0
-        else:
-            index = random.randint(0, len(self.nodes.slots[slot]) - 1)
-        self.used_index = index
-        return self.nodes.slots[slot][index]
-
-    def _shuffle_connections(self, node):
+    def _shuffle_connections(self):
         """
         'shuffle' protocols. Make sure that we devide the load equally among the protocols.
         """
-        self._connections[node] = self._connections[node][1:] + self._connections[node][:1]
+        self._connections = self._connections[1:] + self._connections[:1]
 
     def __getattr__(self, name):
         """
         Proxy to a protocol. (This will choose a protocol instance that's not
         busy in a blocking request or transaction.)
         """
-        def get_key(*args, debug=False):
+        connection = self._get_free_connection()
 
-            is_read = False
-            if name in ('get', 'hget', 'hmget'):
-                is_read = True
+        if connection:
+            return getattr(connection, name)
+        else:
+            raise NoAvailableConnectionsInPoolError('No available connections in the pool: size=%s, in_use=%s, connected=%s' % (
+                                self.poolsize, self.connections_in_use, self.connections_connected))
 
-            key = args[0]
-            host = self._get_host_by_key(key, is_read=is_read)
-            connection = self._get_free_connection(host)
-
-            if is_read:
-                if self.used_index > 0:
-                    yield from getattr(connection, 'readonly')()
-
-            if debug:
-                print('[DEBUG]: Connecting to', connection)
-
-            if connection:
-                result = yield from getattr(connection, name)(*args)
-                return result
-            else:
-                raise NoAvailableConnectionsInPoolError('No available connections in the pool: size=%s, in_use=%s, connected=%s' % (
-                                    self.poolsize, self.connections_in_use, self.connections_connected))
-
-        return get_key
 
     # Proxy the register_script method, so that the returned object will
     # execute on any available connection in the pool.
@@ -177,8 +143,7 @@ class Pool:
         """
         Close all the connections in the pool.
         """
-        for node in self._connections:
-            for c in self._connections[node]:
-                c.close()
+        for c in self._connections:
+            c.close()
 
-        self._connections = {}
+        self._connections = []

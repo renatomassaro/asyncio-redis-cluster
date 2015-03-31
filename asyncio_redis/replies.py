@@ -70,6 +70,9 @@ class DictReply:
         Return the result as a Python dictionary.
         """
         data = yield from self._result._read(count=self._result.count)
+        b1 = data[0]
+        f = yield from b1._read(count=4)
+        print(f)
         return dict(self._parse(k, v) for k, v in zip(data[::2], data[1::2]))
 
     def __repr__(self):
@@ -270,4 +273,3 @@ class EvalScriptReply:
                 return obj
 
         return (yield from decode(self._value))
-

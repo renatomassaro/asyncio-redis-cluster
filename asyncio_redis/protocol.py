@@ -230,6 +230,7 @@ class PostProcessors:
     @classmethod
     def get_default(cls, return_type):
         """ Give post processor function for return type. """
+
         return {
                 ListReply: cls.multibulk_as_list,
                 SetReply: cls.multibulk_as_set,
@@ -308,6 +309,11 @@ class PostProcessors:
     def multibulk_as_dict(protocol, result):
         assert isinstance(result, MultiBulkReply)
         return DictReply(result)
+
+    @asyncio.coroutine
+    def multibulk_as_nested_dict(protocol, result):
+        assert isinstance(result, MultiBulkReply)
+        return NestedDictReply(result)
 
     @asyncio.coroutine
     def multibulk_as_zrangereply(protocol, result):
@@ -726,6 +732,12 @@ class _RedisProtocolMeta(type):
                     _all_commands.append(attr_name + suffix)
 
         return type.__new__(cls, name, bases, attrs)
+
+
+class RedisClusterProtocol(asyncio.Protocol, metaclass=_RedisProtocolMeta):
+
+    def __init__(self):
+        pass
 
 
 class RedisProtocol(asyncio.Protocol, metaclass=_RedisProtocolMeta):
@@ -1757,6 +1769,23 @@ class RedisProtocol(asyncio.Protocol, metaclass=_RedisProtocolMeta):
 
     # Pubsub
     # (subscribe, unsubscribe, etc... should be called through the Subscription class.)
+
+    # Cluster commands
+
+    @_query_command
+    def cluster(self, arg:NativeType) -> str:
+        """ Remove and get the last element in a list """
+        return self._query(b'cluster', self.encode_from_native(arg))
+
+    @_query_command
+    def readonly(self) -> StatusReply:
+        """ Sets current session at slave to be readonly """
+        return self._query(b'readonly')
+
+    @_query_command
+    def readwrite(self) -> StatusReply:
+        """ Sets current session at slave to be readwrite """
+        return self._query(b'readwrite')
 
     @_command
     def start_subscribe(self, *a) -> 'Subscription':
