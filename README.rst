@@ -23,7 +23,7 @@ Installation
 
 .. code::
 
-    pip install asyncio_redis_cluster
+    pip install asyncio-redis-cluster
 
 
 Cluster Client Example
@@ -66,7 +66,7 @@ information read the official redis documentation.
             {'host': '172.17.0.30', 'port': 7005},  # Slave
         ]
     
-        # A poolsize of N means that N connections will be created on **each** link.
+        # A poolsize of N means that N connections will be created on **each** link
         # So if you have a poolsize of 5, with 6 servers, expect at least 30 
         # connections to be created.
         con = yield from Pool().create(nodes=nodes_one, poolsize=5)
@@ -149,7 +149,8 @@ Features
 Documentation
 -------------
 
-Who needs documentation?  
+Who needs documentation?   
+
 Just kidding, check asyncio-redis official documentation below.  
 As for cluster support, check the example.
 
