@@ -1,6 +1,6 @@
 import asyncio
 
-from asyncio_redis.pool import Pool
+from asyncio_redis_cluster.pool import Pool
 
 
 def vidalok():
@@ -21,7 +21,10 @@ def vidalok():
         {'host': '172.17.0.30', 'port': 7005},  # Slave
     ]
 
-    con = yield from Pool().create(nodes=nodes_one, poolsize=3)
+    # A poolsize of N means that N connections will be created on **each** link
+    # So if you have a poolsize of 5, with 6 servers, expect at least 30
+    # connections to be created.
+    con = yield from Pool().create(nodes=nodes_one, poolsize=5)
 
     # Test 1:
     # Making a simple call
