@@ -18,6 +18,14 @@ Redis server. It depends on asyncio (PEP 3156) and therefor it requires Python
 .. _the asyncio documentation: http://docs.python.org/dev/library/asyncio.html
 
 
+Installation
+------------
+
+.. code::
+
+    pip install asyncio-redis-cluster
+
+
 Cluster Client Example
 ------------------
 
@@ -58,7 +66,7 @@ information read the official redis documentation.
             {'host': '172.17.0.30', 'port': 7005},  # Slave
         ]
     
-        # A poolsize of N means that N connections will be created on **each** link.
+        # A poolsize of N means that N connections will be created on **each** link
         # So if you have a poolsize of 5, with 6 servers, expect at least 30 
         # connections to be created.
         con = yield from Pool().create(nodes=nodes_one, poolsize=5)
@@ -138,156 +146,14 @@ Features
 - Pubsub support (NOT TESTED)
 
 
-Installation
-------------
-
-.. code::
-
-    pip install asyncio_redis
-
 Documentation
 -------------
 
-Who needs documentation?  
+Who needs documentation?   
+
 Just kidding, check asyncio-redis official documentation below.  
 As for cluster support, check the example.
 
 View documentation at `read-the-docs`_
 
 .. _read-the-docs: http://asyncio-redis.readthedocs.org/en/latest/
-
-
-
-
-Transactions example
---------------------
-
-.. code:: python
-
-    import asyncio
-    import asyncio_redis
-
-    @asyncio.coroutine
-    def example():
-        # Create Redis connection
-        connection = yield from asyncio_redis.Pool.create(host='localhost', port=6379, poolsize=10)
-
-        # Create transaction
-        transaction = yield from connection.multi()
-
-        # Run commands in transaction (they return future objects)
-        f1 = yield from transaction.set('key', 'value')
-        f2 = yield from transaction.set('another_key', 'another_value')
-
-        # Commit transaction
-        yield from transaction.exec()
-
-        # Retrieve results
-        result1 = yield from f1
-        result2 = yield from f2
-
-        # When finished, close the connection pool.
-        connection.close()
-
-It's recommended to use a large enough poolsize. A connection will be occupied
-as long as there's a transaction running in there.
-
-
-Pubsub example
---------------
-
-.. code:: python
-
-    import asyncio
-    import asyncio_redis
-
-    @asyncio.coroutine
-    def example():
-        # Create connection
-        connection = yield from asyncio_redis.Connection.create(host='localhost', port=6379)
-
-        # Create subscriber.
-        subscriber = yield from connection.start_subscribe()
-
-        # Subscribe to channel.
-        yield from subscriber.subscribe([ 'our-channel' ])
-
-        # Inside a while loop, wait for incoming events.
-        while True:
-            reply = yield from subscriber.next_published()
-            print('Received: ', repr(reply.value), 'on channel', reply.channel)
-
-        # When finished, close the connection.
-        connection.close()
-
-
-LUA Scripting example
----------------------
-
-.. code:: python
-
-    import asyncio
-    import asyncio_redis
-
-    code = \
-    """
-    local value = redis.call('GET', KEYS[1])
-    value = tonumber(value)
-    return value * ARGV[1]
-    """
-
-    @asyncio.coroutine
-    def example():
-        connection = yield from asyncio_redis.Connection.create(host='localhost', port=6379)
-
-        # Set a key
-        yield from connection.set('my_key', '2')
-
-        # Register script
-        multiply = yield from connection.register_script(code)
-
-        # Run script
-        script_reply = yield from multiply.run(keys=['my_key'], args=['5'])
-        result = yield from script_reply.return_value()
-        print(result) # prints 2 * 5
-
-        # When finished, close the connection.
-        connection.close()
-
-
-Example using the Protocol class
---------------------------------
-
-.. code:: python
-
-    import asyncio
-    import asyncio_redis
-
-    @asyncio.coroutine
-    def example():
-        loop = asyncio.get_event_loop()
-
-        # Create Redis connection
-        transport, protocol = yield from loop.create_connection(
-                    asyncio_redis.RedisProtocol, 'localhost', 6379)
-
-        # Set a key
-        yield from protocol.set('my_key', 'my_value')
-
-        # Get a key
-        result = yield from protocol.get('my_key')
-        print(result)
-
-        # Close transport when finished.
-        transport.close()
-
-    if __name__ == '__main__':
-        asyncio.get_event_loop().run_until_complete(example())
-
-
-
-.. |Build Status| image:: https://travis-ci.org/jonathanslenders/asyncio-redis.png
-    :target: https://travis-ci.org/jonathanslenders/asyncio-redis#
-
-.. |Build Status2| image:: https://drone.io/github.com/jonathanslenders/asyncio-redis/status.png
-    :target: https://drone.io/github.com/jonathanslenders/asyncio-redis/latest
