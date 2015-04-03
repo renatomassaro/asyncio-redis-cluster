@@ -13,7 +13,7 @@ else:
 setup(
         name='asyncio-redis-cluster',
         author='Renato Massaro',
-        version='0.1',
+        version='0.1.1',
         license='LICENSE.txt',
         url='https://github.com/hackerexperience/asyncio-redis-cluster',
 
