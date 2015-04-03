@@ -138,8 +138,11 @@ class Pool:
         def get_key(*args, debug=False):
 
             is_read = False
-            if name in ('get', 'hget', 'hmget'):
+            if name in ('get', 'hget', 'hmget', 'hgetall'):
                 is_read = True
+
+            if not args:
+                raise Exception('You must specify an argument (FIXME)')
 
             key = args[0]
             host = self._get_host_by_key(key, is_read=is_read)
