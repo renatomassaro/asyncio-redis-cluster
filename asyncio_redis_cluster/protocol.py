@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import asyncio
 import logging
+import socket
 import types
 
 from asyncio.futures import Future
@@ -817,6 +818,12 @@ class RedisProtocol(asyncio.Protocol, metaclass=_RedisProtocolMeta):
         self._reader = StreamReader(loop=self._loop)
         self._reader.set_transport(transport)
         self._reader_f = asyncio.async(self._reader_coroutine(), loop=self._loop)
+
+        transport.pause_reading()
+        raw_sock = transport.get_extra_info('socket', default=None)
+        if raw_sock:
+            raw_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        transport.resume_reading()
 
         @asyncio.coroutine
         def initialize():
@@ -1701,6 +1708,12 @@ class RedisProtocol(asyncio.Protocol, metaclass=_RedisProtocolMeta):
         """ Set multiple hash fields to multiple values """
         data = [ ]
         for k,v in values.items():
+
+            if isinstance(k, int):
+                k = str(k)
+            if isinstance(v, int):
+                v = str(v)
+
             assert isinstance(k, self.native_type)
             assert isinstance(v, self.native_type)
 
